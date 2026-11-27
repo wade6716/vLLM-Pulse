@@ -1,7 +1,8 @@
 # Binaries & build artifacts
-vllm-pulse
-vllm-pulse.exe
-vllm-pulse-*
+/vllm-pulse
+/vllm-pulse.exe
+/vllm-pulse-*
+/dist/
 *.exe
 *.out
 *.test
