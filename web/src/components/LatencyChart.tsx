@@ -23,95 +23,129 @@ export function LatencyChart({ summary, points, range }: LatencyChartProps) {
 
     return {
       animation: false,
-      grid: { left: 46, right: 16, top: 20, bottom: 22 },
+      grid: { left: 46, right: 44, top: 22, bottom: 22 },
       tooltip: {
         trigger: 'axis',
-        backgroundColor: 'rgba(15, 23, 42, 0.95)',
-        borderColor: '#334155',
-        textStyle: { color: '#E2E8F0', fontSize: 12 },
+        backgroundColor: 'rgba(38, 38, 42, 0.92)',
+        borderColor: 'rgba(255, 255, 255, 0.14)',
+        borderWidth: 1,
+        borderRadius: 12,
+        padding: [10, 12],
+        textStyle: { color: '#F5F5F7', fontSize: 12 },
+        axisPointer: {
+          type: 'line',
+          lineStyle: { color: 'rgba(255, 255, 255, 0.22)' },
+        },
         valueFormatter: (v: unknown) => (typeof v === 'number' ? `${v.toFixed(1)} ms` : '--'),
       },
       xAxis: {
         type: 'time',
         boundaryGap: false,
-        axisLine: { lineStyle: { color: '#1E293B' } },
+        axisLine: { show: false },
         axisTick: { show: false },
         axisLabel: {
-          color: '#64748B',
+          color: 'rgba(235, 235, 245, 0.38)',
           fontSize: 10,
           formatter: (val: number) => formatTimeClock(val, withSec),
         },
       },
-      yAxis: {
-        type: 'value',
-        name: 'ms',
-        nameTextStyle: { color: '#64748B', fontSize: 10, align: 'right' },
-        axisLabel: { color: '#94A3B8', fontSize: 10 },
-        splitLine: { lineStyle: { color: 'rgba(51, 65, 85, 0.35)', type: 'dashed' } },
-        min: 0,
-      },
+      yAxis: [
+        {
+          type: 'value',
+          name: 'TTFT',
+          nameTextStyle: { color: 'rgba(100, 210, 255, 0.65)', fontSize: 10, align: 'right' },
+          axisLine: { show: false },
+          axisTick: { show: false },
+          axisLabel: { color: 'rgba(235, 235, 245, 0.45)', fontSize: 10 },
+          splitLine: { lineStyle: { color: 'rgba(255, 255, 255, 0.05)' } },
+          min: 0,
+        },
+        {
+          type: 'value',
+          name: 'ITL',
+          nameTextStyle: { color: 'rgba(48, 209, 88, 0.65)', fontSize: 10, align: 'left' },
+          axisLine: { show: false },
+          axisTick: { show: false },
+          axisLabel: { color: 'rgba(235, 235, 245, 0.45)', fontSize: 10 },
+          splitLine: { show: false },
+          min: 0,
+        },
+      ],
       series: [
         {
           name: 'TTFT 首字 P50',
           type: 'line',
+          yAxisIndex: 0,
           data: ttft50,
           showSymbol: false,
           connectNulls: false,
-          smooth: 0.2,
-          lineStyle: { width: 2, color: '#06B6D4' },
+          smooth: 0.35,
+          lineStyle: { width: 2, color: '#64D2FF' },
         },
         {
           name: 'TTFT 首字 P95',
           type: 'line',
+          yAxisIndex: 0,
           data: ttft95,
           showSymbol: false,
           connectNulls: false,
-          smooth: 0.2,
-          lineStyle: { width: 1.75, color: '#38BDF8', type: 'dashed' },
+          smooth: 0.35,
+          lineStyle: { width: 1.75, color: '#0A84FF', type: 'dashed' },
         },
         {
           name: 'ITL 字间 P50',
           type: 'line',
+          yAxisIndex: 1,
           data: itl50,
           showSymbol: false,
           connectNulls: false,
-          smooth: 0.2,
-          lineStyle: { width: 2, color: '#10B981' },
+          smooth: 0.35,
+          lineStyle: { width: 2, color: '#30D158' },
         },
         {
           name: 'ITL 字间 P95',
           type: 'line',
+          yAxisIndex: 1,
           data: itl95,
           showSymbol: false,
           connectNulls: false,
-          smooth: 0.2,
-          lineStyle: { width: 1.75, color: '#F59E0B', type: 'dashed' },
+          smooth: 0.35,
+          lineStyle: { width: 1.75, color: '#FF9F0A', type: 'dashed' },
         },
       ],
     };
   }, [points, withSec]);
 
   return (
-    <div className="flex flex-col p-3.5 rounded-xl bg-[#111827]/85 border border-slate-800/80 min-h-0">
+    <div className="apple-card flex flex-col p-4 min-h-0">
       <div className="flex items-center justify-between gap-2 mb-1 shrink-0">
         <div className="flex items-center gap-1.5">
-          <span className="text-xs font-semibold tracking-wider text-slate-300">
-            实时延迟分位数（近30s滑窗）
+          <span className="text-[13px] font-semibold text-[#F5F5F7] tracking-tight">
+            实时延迟分位数
           </span>
           <InfoTip
-            title="首字延迟 TTFT 与字间延迟 ITL"
-            formula="time_to_first_token / inter_token_latency_seconds_bucket"
-            description="基于近 30 秒 Histogram 桶差值按 Prometheus histogram_quantile 线性插值计算。TTFT 为首 Token 响应耗时（受 Prefill 与排队影响）；ITL 为 Token 间生成耗时（决定流式输出流畅度）。P50 为中位数，P95 为尾部延迟。"
+            title="首字延迟 TTFT 与字间延迟 ITL（近30s滑窗）"
+            formula="左轴 TTFT (ms) · 右轴 ITL (ms) · histogram_quantile"
+            description="基于近 30 秒 Histogram 桶差值按 Prometheus 算法线性插值计算。TTFT（左轴）为首 Token 响应耗时；ITL（右轴）为 Token 间生成耗时（决定流式输出流畅度）。双轴独立刻度确保两组曲线均清晰可读。"
           />
+          <span className="text-[11px] text-white/35 ml-1">近 30s</span>
         </div>
 
-        <div className="flex items-center gap-2.5 text-[11px] mono-nums shrink-0">
-          <span className="text-cyan-300">
-            首字 TTFT {formatMs(latest?.ttftP50Ms)} / <span className="text-sky-300">{formatMs(latest?.ttftP95Ms)}</span>
+        <div className="flex items-center gap-3 text-[11px] tabular-nums shrink-0">
+          <span className="flex items-center gap-1.5 text-white/75">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#64D2FF]" />
+            <span className="text-white/45">TTFT</span>
+            <span className="font-medium text-[#F5F5F7]">
+              {formatMs(latest?.ttftP50Ms)} / {formatMs(latest?.ttftP95Ms)}
+            </span>
           </span>
-          <span className="text-slate-600">|</span>
-          <span className="text-emerald-300">
-            字间 ITL {formatMs(latest?.itlP50Ms)} / <span className="text-amber-300">{formatMs(latest?.itlP95Ms)}</span>
+          <span className="text-white/15">·</span>
+          <span className="flex items-center gap-1.5 text-white/75">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#30D158]" />
+            <span className="text-white/45">ITL</span>
+            <span className="font-medium text-[#F5F5F7]">
+              {formatMs(latest?.itlP50Ms)} / {formatMs(latest?.itlP95Ms)}
+            </span>
           </span>
         </div>
       </div>

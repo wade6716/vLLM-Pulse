@@ -1,4 +1,4 @@
-import { Activity, Clock, Maximize2, Minimize2, Plus, Radio, ShieldAlert, Tv } from 'lucide-react';
+import { Activity, Clock, Maximize2, Minimize2, Plus, ShieldAlert, Tv } from 'lucide-react';
 import type { NodeSummary, TimeRange } from '../types';
 import { formatModelDisplay, formatUptime } from '../utils/format';
 import { InfoTip } from './InfoTip';
@@ -42,39 +42,41 @@ export function TopBar({
   const scrapeMs = summary?.scrapeDurationMs ?? 0;
 
   return (
-    <header className="h-[7.5%] min-h-[46px] max-h-[60px] shrink-0 flex items-center justify-between gap-3 px-4 rounded-xl bg-[#111827]/90 border border-slate-800/80 shadow-lg">
-      {/* 左侧：品牌标识 + 节点选择 + TV 大屏轮播 */}
+    <header className="h-[7%] min-h-[48px] max-h-[58px] shrink-0 apple-card flex items-center justify-between gap-3 px-4">
+      {/* 左侧：Apple 风格徽标 + 节点选择胶囊 + 大屏轮播 */}
       <div className="flex items-center gap-3 min-w-0">
-        <div className="flex items-center gap-2 shrink-0">
-          <div className="w-7 h-7 rounded-lg bg-emerald-500/15 border border-emerald-500/35 flex items-center justify-center text-emerald-400">
+        <div className="flex items-center gap-2.5 shrink-0">
+          <div className="w-7 h-7 rounded-xl bg-gradient-to-b from-[#30D158]/25 to-[#30D158]/10 border border-[#30D158]/30 flex items-center justify-center text-[#30D158]">
             <Activity className="w-4 h-4" />
           </div>
-          <div className="flex items-baseline gap-1.5">
-            <span className="text-sm font-bold tracking-tight text-slate-100">vLLM-Pulse</span>
+          <div className="flex items-center gap-2">
+            <span className="text-[15px] font-semibold tracking-tight text-[#F5F5F7]">vLLM-Pulse</span>
             {mockMode && (
-              <span className="px-1.5 py-0.5 text-[10px] font-semibold tracking-wider rounded bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
+              <span className="px-2 py-0.5 text-[10px] font-medium rounded-full bg-[#0A84FF]/15 text-[#64D2FF]">
                 模拟模式
               </span>
             )}
           </div>
         </div>
 
-        <div className="h-4 w-px bg-slate-800 shrink-0" />
+        <div className="h-4 w-px bg-white/10 shrink-0" />
 
         <div className="flex items-center gap-1.5 min-w-0">
           <select
             aria-label="选择监控节点"
             value={activeNodeId}
             onChange={(e) => onSelectNode(e.target.value)}
-            className="bg-[#0B0F19] text-slate-200 text-xs font-medium px-2.5 py-1.5 rounded-lg border border-slate-700/80 focus:outline-none focus:border-cyan-500/70 max-w-[240px] truncate cursor-pointer"
+            className="bg-white/[0.06] hover:bg-white/[0.10] text-[#F5F5F7] text-xs font-medium px-3 py-1.5 rounded-xl border border-white/[0.08] focus:outline-none focus:border-[#0A84FF]/70 max-w-[240px] truncate cursor-pointer transition-colors"
           >
-            <option value="all">集群汇总 ({nodes.length} 节点)</option>
+            <option value="all" className="bg-[#1C1C1E] text-[#F5F5F7]">
+              集群汇总 ({nodes.length} 节点)
+            </option>
             {nodes.map((n) => {
               const kv = n.latest ? `${n.latest.kvCachePct.toFixed(0)}%` : '--';
               const tag = n.status === 'OFFLINE' ? '离线' : `KV ${kv}`;
               return (
-                <option key={n.id} value={n.id}>
-                  {n.name} [{tag}]
+                <option key={n.id} value={n.id} className="bg-[#1C1C1E] text-[#F5F5F7]">
+                  {n.name} · {tag}
                 </option>
               );
             })}
@@ -85,7 +87,7 @@ export function TopBar({
               type="button"
               onClick={onOpenAddNode}
               title="添加临时 vLLM 监控节点"
-              className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 border border-slate-700/70 transition-colors cursor-pointer"
+              className="p-1.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-white/75 border border-white/[0.08] transition-colors cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
             </button>
@@ -97,17 +99,17 @@ export function TopBar({
             <button
               type="button"
               onClick={onToggleTvRotate}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors cursor-pointer shrink-0 ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border transition-all cursor-pointer shrink-0 ${
                 lockedByAlert
-                  ? 'bg-red-500/20 text-red-300 border-red-500/50 animate-pulse'
+                  ? 'bg-[#FF453A]/20 text-[#FF6961] border-[#FF453A]/45 animate-pulse'
                   : tvRotate
-                    ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/40'
-                    : 'bg-slate-800/70 text-slate-400 border-slate-700/70 hover:text-slate-200'
+                    ? 'bg-[#0A84FF]/20 text-[#64D2FF] border-[#0A84FF]/35'
+                    : 'bg-white/[0.06] text-white/65 border-white/[0.08] hover:bg-white/[0.10] hover:text-white/90'
               }`}
             >
               {lockedByAlert ? (
                 <>
-                  <ShieldAlert className="w-3.5 h-3.5 text-red-400" />
+                  <ShieldAlert className="w-3.5 h-3.5 text-[#FF453A]" />
                   <span>异常锁定</span>
                 </>
               ) : (
@@ -127,21 +129,21 @@ export function TopBar({
         )}
       </div>
 
-      {/* 中间：当前模型 + 引擎运行时长 */}
-      <div className="flex items-center gap-2.5 min-w-0">
-        <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-[#0B0F19]/90 border border-slate-800 min-w-0">
-          <span className="text-[10px] tracking-wider text-slate-500 font-semibold shrink-0">
-            当前模型
-          </span>
-          <span className="text-xs font-semibold text-cyan-300 truncate max-w-[250px]">
+      {/* 中间：极简居中模型名与引擎运行时长 */}
+      <div className="flex items-center gap-3 min-w-0 px-3.5 py-1 rounded-full bg-white/[0.04] border border-white/[0.06]">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-[11px] text-white/40 font-medium shrink-0">当前模型</span>
+          <span className="text-xs font-semibold text-[#F5F5F7] truncate max-w-[240px]">
             {formatModelDisplay(summary?.modelName)}
           </span>
         </div>
 
-        <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#0B0F19]/90 border border-slate-800 shrink-0">
-          <Clock className="w-3 h-3 text-slate-400" />
-          <span className="text-[10px] tracking-wider text-slate-500 font-semibold">运行时长</span>
-          <span className="text-xs font-medium text-slate-200 mono-nums">
+        <div className="hidden md:block h-3 w-px bg-white/10 shrink-0" />
+
+        <div className="hidden md:flex items-center gap-1.5 shrink-0">
+          <Clock className="w-3 h-3 text-white/40" />
+          <span className="text-[11px] text-white/40 font-medium">运行时长</span>
+          <span className="text-xs font-medium text-white/85 tabular-nums">
             {formatUptime(summary?.uptimeSec ?? 0)}
           </span>
           <InfoTip
@@ -152,22 +154,19 @@ export function TopBar({
         </div>
       </div>
 
-      {/* 右侧：在线呼吸灯 + 采集延迟 + 时间窗切换 + 全屏 */}
+      {/* 右侧：在线呼吸状态 + 分段式时间窗控件 + 全屏 */}
       <div className="flex items-center gap-2.5 shrink-0">
-        <div className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-[#0B0F19]/80 border border-slate-800">
+        <div className="flex items-center gap-2 px-3 py-1 rounded-xl bg-white/[0.04] border border-white/[0.06]">
           <span
             className={`w-2 h-2 rounded-full ${
-              isOnline ? 'bg-emerald-400 animate-live-breathe' : 'bg-red-500'
+              isOnline ? 'bg-[#30D158] animate-live-breathe' : 'bg-[#FF453A]'
             }`}
           />
-          <span className={`text-xs font-semibold ${isOnline ? 'text-emerald-400' : 'text-red-400'}`}>
+          <span className={`text-xs font-medium ${isOnline ? 'text-[#30D158]' : 'text-[#FF453A]'}`}>
             {isOnline ? '在线' : sseConnected ? '离线' : '同步中'}
           </span>
-          <span className="text-slate-600">|</span>
-          <span className="flex items-center gap-1 text-xs text-slate-400 mono-nums">
-            <Radio className="w-3 h-3 text-slate-500" />
-            {scrapeMs}ms
-          </span>
+          <span className="text-white/15">·</span>
+          <span className="text-xs text-white/55 tabular-nums">{scrapeMs}ms</span>
           <InfoTip
             title="采集延迟 (Scrape Latency)"
             formula="单次 GET /metrics 往返耗时"
@@ -175,7 +174,7 @@ export function TopBar({
           />
         </div>
 
-        <div className="flex items-center p-0.5 rounded-lg bg-[#0B0F19] border border-slate-800">
+        <div className="apple-segmented flex items-center">
           {([
             { id: '15m', label: '15分钟' },
             { id: '6h', label: '6小时' },
@@ -184,10 +183,10 @@ export function TopBar({
               key={r.id}
               type="button"
               onClick={() => onSelectRange(r.id)}
-              className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors cursor-pointer ${
+              className={`px-3 py-1 rounded-[8px] text-xs font-medium transition-all cursor-pointer ${
                 range === r.id
-                  ? 'bg-slate-700/80 text-slate-100 shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'apple-segmented-active text-[#F5F5F7]'
+                  : 'text-white/45 hover:text-white/80'
               }`}
             >
               {r.label}
@@ -199,7 +198,7 @@ export function TopBar({
           type="button"
           onClick={onToggleFullscreen}
           title={isFullscreen ? '退出全屏' : '进入全屏'}
-          className="p-1.5 rounded-lg bg-[#0B0F19] hover:bg-slate-800 text-slate-300 border border-slate-800 transition-colors cursor-pointer"
+          className="p-1.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.11] text-white/70 hover:text-[#F5F5F7] border border-white/[0.07] transition-colors cursor-pointer"
         >
           {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
         </button>

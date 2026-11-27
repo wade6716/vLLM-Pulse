@@ -29,7 +29,7 @@ export function App() {
     deleteNode,
   } = useMetricsStream(activeNodeId, range);
 
-  // Default to the first node if only 1 node is configured
+  // 单节点配置时默认直接展示该节点
   useEffect(() => {
     if (nodes.length === 1 && activeNodeId === 'all') {
       setActiveNodeId(nodes[0].id);
@@ -69,10 +69,15 @@ export function App() {
   );
 
   const displaySummary = activeNodeId === 'all' ? (clusterSummary ?? activeSummary) : activeSummary;
+  const isCritical = displaySummary?.alertLevel === 'critical';
 
   return (
-    <main className="h-screen w-screen overflow-hidden flex flex-col bg-[#0B0F19] p-3 gap-2.5 select-none">
-      {/* Row 1: Top Status Bar (~8%) */}
+    <main
+      className={`h-screen w-screen overflow-hidden flex flex-col p-3.5 gap-3 select-none transition-all duration-700 ${
+        isCritical ? 'apple-canvas-alert' : 'apple-canvas'
+      }`}
+    >
+      {/* 第一区：悬浮磨砂顶栏 (~7%) */}
       <TopBar
         nodes={nodes}
         activeNodeId={activeNodeId}
@@ -91,17 +96,17 @@ export function App() {
         onOpenAddNode={() => setAddModalOpen(true)}
       />
 
-      {/* Row 2: 4 Core KPI Pulse Cards (~18%) */}
+      {/* 第二区：4 张核心 KPI 脉冲卡 (~18.5%) */}
       <KpiRow summary={displaySummary} points={points} />
 
-      {/* Row 3: Visual Core — KV Gauge + Preemption Pulse (35%) & Main Pulse Waveform (65%) (~44%) */}
-      <section className="h-[44.5%] min-h-0 grid grid-cols-[35fr_65fr] gap-2.5">
+      {/* 第三区：视觉主轴 — KV 圆环压力表 (34%) & 主脉搏波形 (66%) (~44.5%) */}
+      <section className="h-[44.5%] min-h-0 grid grid-cols-[34fr_66fr] gap-3">
         <KvPreemptionPanel summary={displaySummary} nowMs={nowMs} />
         <MainPulseChart points={points} preemptions={preemptions} range={range} />
       </section>
 
-      {/* Row 4: Latency Trends (50%) & Adaptive Diagnostics (50%) (~30%) */}
-      <section className="h-[30%] min-h-0 grid grid-cols-2 gap-2.5">
+      {/* 第四区：双轴延迟趋势 (50%) & 自适应专项诊断 (50%) (~30%) */}
+      <section className="h-[30%] min-h-0 grid grid-cols-2 gap-3">
         <LatencyChart summary={displaySummary} points={points} range={range} />
         <DiagnosticPanel
           activeNodeId={activeNodeId}

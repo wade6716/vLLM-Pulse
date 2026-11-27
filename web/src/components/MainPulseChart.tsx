@@ -22,7 +22,6 @@ export function MainPulseChart({ points, preemptions, range }: MainPulseChartPro
     const minTs = points.length > 0 ? points[0].ts : 0;
     const maxTs = points.length > 0 ? points[points.length - 1].ts : 0;
 
-    // 仅渲染当前可见时间窗内的抢占标记线
     const visiblePreemptions = preemptions.filter((ev) => ev.ts >= minTs && ev.ts <= maxTs + 1000);
     const preemptMap = new Map<number, PreemptionEvent[]>();
     for (const ev of visiblePreemptions) {
@@ -39,15 +38,15 @@ export function MainPulseChart({ points, preemptions, range }: MainPulseChartPro
         label: {
           show: true,
           formatter: `+${Math.round(totalDelta)}`,
-          color: '#FCA5A5',
+          color: '#FFFFFF',
           fontSize: 10,
-          fontWeight: 700,
-          backgroundColor: 'rgba(127, 29, 29, 0.85)',
-          padding: [2, 4],
-          borderRadius: 3,
+          fontWeight: 600,
+          backgroundColor: 'rgba(255, 69, 58, 0.85)',
+          padding: [2, 6],
+          borderRadius: 6,
         },
         lineStyle: {
-          color: '#EF4444',
+          color: 'rgba(255, 69, 58, 0.78)',
           width: 1.5,
           type: 'dashed' as const,
         },
@@ -57,19 +56,22 @@ export function MainPulseChart({ points, preemptions, range }: MainPulseChartPro
     return {
       animation: false,
       grid: {
-        left: 52,
-        right: 48,
-        top: 28,
+        left: 50,
+        right: 46,
+        top: 26,
         bottom: 24,
       },
       tooltip: {
         trigger: 'axis',
-        backgroundColor: 'rgba(15, 23, 42, 0.95)',
-        borderColor: '#334155',
-        textStyle: { color: '#E2E8F0', fontSize: 12 },
+        backgroundColor: 'rgba(38, 38, 42, 0.92)',
+        borderColor: 'rgba(255, 255, 255, 0.14)',
+        borderWidth: 1,
+        borderRadius: 12,
+        padding: [10, 12],
+        textStyle: { color: '#F5F5F7', fontSize: 12 },
         axisPointer: {
-          type: 'cross',
-          lineStyle: { color: '#475569' },
+          type: 'line',
+          lineStyle: { color: 'rgba(255, 255, 255, 0.22)', width: 1 },
         },
         formatter: (params: unknown) => {
           const list = Array.isArray(params) ? params : [];
@@ -77,20 +79,20 @@ export function MainPulseChart({ points, preemptions, range }: MainPulseChartPro
           const first = list[0] as { value?: [number, number] };
           const ts = first?.value?.[0] ?? 0;
           const timeStr = formatTimeClock(ts, true);
-          let html = `<div style="font-weight:600;margin-bottom:4px;color:#94A3B8">${timeStr}</div>`;
+          let html = `<div style="font-weight:600;margin-bottom:6px;color:rgba(235,235,245,0.55);font-size:11px">${timeStr}</div>`;
           for (const item of list as Array<{ seriesName: string; color: string; value: [number, number] }>) {
             const unit = item.seriesName.includes('KV') ? '%' : ' tok/s';
             const val = item.value?.[1] !== undefined ? item.value[1].toFixed(1) : '--';
-            html += `<div style="display:flex;justify-content:space-between;gap:14px">
-              <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${item.color};margin-right:6px"></span>${item.seriesName}</span>
-              <span style="font-family:monospace;font-weight:600">${val}${unit}</span>
+            html += `<div style="display:flex;justify-content:space-between;align-items:center;gap:16px;margin:2px 0">
+              <span style="color:rgba(245,245,247,0.85)"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${item.color};margin-right:7px"></span>${item.seriesName}</span>
+              <span style="font-variant-numeric:tabular-nums;font-weight:600;color:#F5F5F7">${val}${unit}</span>
             </div>`;
           }
           const nearEvs = visiblePreemptions.filter((e) => Math.abs(e.ts - ts) <= (withSec ? 1000 : 30000));
           if (nearEvs.length > 0) {
             const sumD = nearEvs.reduce((a, b) => a + b.delta, 0);
-            html += `<div style="margin-top:5px;padding-top:4px;border-top:1px solid #334155;color:#F87171;font-weight:700">
-              抢占尖刺：+${Math.round(sumD)} 次（当时 KV ${nearEvs[0].kvCachePct.toFixed(1)}%）
+            html += `<div style="margin-top:7px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.1);color:#FF6961;font-weight:600;font-size:11px">
+              抢占尖刺：+${Math.round(sumD)} 次（KV ${nearEvs[0].kvCachePct.toFixed(1)}%）
             </div>`;
           }
           return html;
@@ -99,10 +101,10 @@ export function MainPulseChart({ points, preemptions, range }: MainPulseChartPro
       xAxis: {
         type: 'time',
         boundaryGap: false,
-        axisLine: { lineStyle: { color: '#1E293B' } },
+        axisLine: { show: false },
         axisTick: { show: false },
         axisLabel: {
-          color: '#64748B',
+          color: 'rgba(235, 235, 245, 0.38)',
           fontSize: 10,
           formatter: (val: number) => formatTimeClock(val, withSec),
         },
@@ -112,19 +114,23 @@ export function MainPulseChart({ points, preemptions, range }: MainPulseChartPro
         {
           type: 'value',
           name: 'tok/s',
-          nameTextStyle: { color: '#64748B', fontSize: 10, align: 'right' },
-          axisLabel: { color: '#94A3B8', fontSize: 10 },
-          splitLine: { lineStyle: { color: 'rgba(51, 65, 85, 0.35)', type: 'dashed' } },
+          nameTextStyle: { color: 'rgba(235, 235, 245, 0.35)', fontSize: 10, align: 'right' },
+          axisLine: { show: false },
+          axisTick: { show: false },
+          axisLabel: { color: 'rgba(235, 235, 245, 0.45)', fontSize: 10 },
+          splitLine: { lineStyle: { color: 'rgba(255, 255, 255, 0.055)' } },
           min: 0,
         },
         {
           type: 'value',
           name: 'KV %',
-          nameTextStyle: { color: '#64748B', fontSize: 10, align: 'left' },
+          nameTextStyle: { color: 'rgba(235, 235, 245, 0.35)', fontSize: 10, align: 'left' },
           min: 0,
           max: 100,
           interval: 25,
-          axisLabel: { color: '#94A3B8', fontSize: 10, formatter: '{value}%' },
+          axisLine: { show: false },
+          axisTick: { show: false },
+          axisLabel: { color: 'rgba(235, 235, 245, 0.45)', fontSize: 10, formatter: '{value}%' },
           splitLine: { show: false },
         },
       ],
@@ -135,8 +141,8 @@ export function MainPulseChart({ points, preemptions, range }: MainPulseChartPro
           yAxisIndex: 0,
           data: genSeries,
           showSymbol: false,
-          smooth: 0.2,
-          lineStyle: { width: 2, color: '#10B981' },
+          smooth: 0.35,
+          lineStyle: { width: 2.2, color: '#30D158' },
           areaStyle: {
             color: {
               type: 'linear',
@@ -145,8 +151,8 @@ export function MainPulseChart({ points, preemptions, range }: MainPulseChartPro
               x2: 0,
               y2: 1,
               colorStops: [
-                { offset: 0, color: 'rgba(16, 185, 129, 0.25)' },
-                { offset: 1, color: 'rgba(16, 185, 129, 0.01)' },
+                { offset: 0, color: 'rgba(48, 209, 88, 0.22)' },
+                { offset: 1, color: 'rgba(48, 209, 88, 0.0)' },
               ],
             },
           },
@@ -162,8 +168,8 @@ export function MainPulseChart({ points, preemptions, range }: MainPulseChartPro
           yAxisIndex: 0,
           data: promptSeries,
           showSymbol: false,
-          smooth: 0.2,
-          lineStyle: { width: 1.75, color: '#06B6D4' },
+          smooth: 0.35,
+          lineStyle: { width: 2, color: '#0A84FF' },
           areaStyle: {
             color: {
               type: 'linear',
@@ -172,8 +178,8 @@ export function MainPulseChart({ points, preemptions, range }: MainPulseChartPro
               x2: 0,
               y2: 1,
               colorStops: [
-                { offset: 0, color: 'rgba(6, 182, 212, 0.16)' },
-                { offset: 1, color: 'rgba(6, 182, 212, 0.01)' },
+                { offset: 0, color: 'rgba(10, 132, 255, 0.16)' },
+                { offset: 1, color: 'rgba(10, 132, 255, 0.0)' },
               ],
             },
           },
@@ -184,15 +190,15 @@ export function MainPulseChart({ points, preemptions, range }: MainPulseChartPro
           yAxisIndex: 1,
           data: kvSeries,
           showSymbol: false,
-          smooth: 0.2,
-          lineStyle: { width: 2, color: '#F59E0B', type: 'dashed' },
+          smooth: 0.35,
+          lineStyle: { width: 2, color: '#FF9F0A', type: 'dashed' },
           markLine: {
             symbol: ['none', 'none'],
             silent: true,
             label: { show: false },
             data: [
-              { yAxis: 70, lineStyle: { color: 'rgba(245, 158, 11, 0.3)', type: 'dotted', width: 1 } },
-              { yAxis: 85, lineStyle: { color: 'rgba(239, 68, 68, 0.45)', type: 'dotted', width: 1 } },
+              { yAxis: 70, lineStyle: { color: 'rgba(255, 159, 10, 0.22)', type: 'dotted', width: 1 } },
+              { yAxis: 85, lineStyle: { color: 'rgba(255, 69, 58, 0.32)', type: 'dotted', width: 1 } },
             ],
           },
         },
@@ -201,10 +207,10 @@ export function MainPulseChart({ points, preemptions, range }: MainPulseChartPro
   }, [points, preemptions, withSec]);
 
   return (
-    <div className="flex flex-col p-3.5 rounded-xl bg-[#111827]/85 border border-slate-800/80 min-h-0">
+    <div className="apple-card flex flex-col p-4 min-h-0">
       <div className="flex items-center justify-between gap-2 mb-1 shrink-0">
         <div className="flex items-center gap-1.5">
-          <span className="text-xs font-semibold tracking-wider text-slate-300">
+          <span className="text-[13px] font-semibold text-[#F5F5F7] tracking-tight">
             吞吐与 KV 压力主脉搏
           </span>
           <InfoTip
@@ -212,21 +218,21 @@ export function MainPulseChart({ points, preemptions, range }: MainPulseChartPro
             formula="左轴：Token 吞吐 (tok/s) · 右轴：KV 使用率 (%)"
             description="将生成/提示词吞吐与 KV Cache 使用率叠加展示，配合 70%/85% 警戒虚线与抢占红线标记，直观还原显存打满导致抢占及吞吐波动的因果关系。"
           />
-          <span className="text-[11px] text-slate-500 ml-1">双轴实时波形</span>
+          <span className="text-[11px] text-white/35 ml-1">双轴实时波形</span>
         </div>
 
-        <div className="flex items-center gap-3 text-[11px] text-slate-300 shrink-0">
+        <div className="flex items-center gap-3.5 text-[11px] text-white/65 shrink-0">
           <span className="flex items-center gap-1.5">
-            <span className="w-2.5 h-0.5 bg-emerald-400 inline-block" /> 生成吞吐
+            <span className="w-2 h-2 rounded-full bg-[#30D158]" /> 生成吞吐
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="w-2.5 h-0.5 bg-cyan-400 inline-block" /> 提示词吞吐
+            <span className="w-2 h-2 rounded-full bg-[#0A84FF]" /> 提示词吞吐
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="w-2.5 h-0.5 border-t-2 border-dashed border-amber-400 inline-block" /> KV 使用率
+            <span className="w-2 h-2 rounded-full bg-[#FF9F0A]" /> KV 使用率
           </span>
-          <span className="flex items-center gap-1.5 text-red-400">
-            <span className="w-0.5 h-3 bg-red-500 inline-block" /> 抢占标记
+          <span className="flex items-center gap-1.5 text-[#FF6961]">
+            <span className="w-0.5 h-3 rounded-full bg-[#FF453A]" /> 抢占标记
           </span>
         </div>
       </div>

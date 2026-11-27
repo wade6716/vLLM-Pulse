@@ -58,13 +58,19 @@ export function formatModelDisplay(raw?: string): string {
 }
 
 export function kvThresholdColor(pct: number): string {
-  if (pct >= 85) return '#EF4444'; // 警示红
-  if (pct >= 70) return '#F59E0B'; // 琥珀黄
-  return '#10B981'; // 平稳翠绿
+  if (pct >= 85) return '#FF453A'; // Apple System Red
+  if (pct >= 70) return '#FF9F0A'; // Apple System Orange
+  return '#30D158'; // Apple System Green
 }
 
 export function kvThresholdTextClass(pct: number): string {
-  if (pct >= 85) return 'text-red-400';
-  if (pct >= 70) return 'text-amber-400';
-  return 'text-emerald-400';
+  if (pct >= 85) return 'text-[#FF453A]';
+  if (pct >= 70) return 'text-[#FF9F0A]';
+  return 'text-[#30D158]';
+}
+
+export function kvStatusLabel(pct: number): string {
+  if (pct >= 85) return '显存高危';
+  if (pct >= 70) return '水位偏高';
+  return '显存平稳';
 }
