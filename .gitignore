@@ -1,0 +1,18 @@
+# Binaries & build artifacts
+vllm-pulse
+vllm-pulse.exe
+vllm-pulse-*
+*.exe
+*.out
+*.test
+
+# Frontend dependencies & build outputs
+web/node_modules/
+web/dist/
+internal/server/dist/*
+!internal/server/dist/.gitkeep
+
+# Local config / env / logs
+.env
+*.log
+configs/config.yaml

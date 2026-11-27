@@ -1,0 +1,28 @@
+# vLLM-Pulse Multi-Node Configuration Example
+server:
+  host: 0.0.0.0
+  port: 8080
+
+scrape:
+  interval: 1s
+  timeout: 2s
+
+# Downsampled 1-minute ring buffer retention in hours (6..24)
+retention_hours: 6
+
+nodes:
+  - id: qwen3-a100
+    name: "gpu-a100-01 (Qwen3-27B)"
+    url: "http://10.0.1.10:11435/metrics"
+    # Optional custom headers (supports ${ENV_VAR} expansion for reverse-proxy auth)
+    headers:
+      Authorization: "Bearer ${VLLM_API_KEY}"
+
+  - id: llama3-h100
+    name: "gpu-h100-02 (Llama-3.3-70B)"
+    url: "http://10.0.1.11:8000/metrics"
+    headers:
+      X-Cluster-Token: "${VLLM_CLUSTER_TOKEN}"
+
+  - name: "gpu-l40s-03 (DeepSeek-R1)"
+    url: "http://10.0.1.12:8000/metrics"
