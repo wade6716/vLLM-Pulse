@@ -51,7 +51,7 @@ func DefaultConfig() Config {
 			Interval: time.Second,
 			Timeout:  2 * time.Second,
 		},
-		RetentionHours: 6,
+		RetentionHours: 24,
 		Mock:           false,
 	}
 }
@@ -79,7 +79,7 @@ func LoadFile(path string) (Config, error) {
 		cfg.Scrape.Timeout = 2 * time.Second
 	}
 	if cfg.RetentionHours == 0 {
-		cfg.RetentionHours = 6
+		cfg.RetentionHours = 24
 	}
 	return cfg, nil
 }

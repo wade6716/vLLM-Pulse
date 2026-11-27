@@ -41,7 +41,7 @@
 ## ✨ 核心特性
 
 * **纯远程指标驱动，安全隔离**：仅通过 HTTP GET 拉取远端 vLLM `/metrics`，**严禁**依赖宿主机 `nvidia-smi`、`/proc` 或本地 Agent；同时避免浏览器直连 vLLM 导致的跨域与多客户端重复压测问题。
-* **零数据库内存 Ring Buffer**：每节点内置双层定长环形缓冲——**1s 高频环（15 分钟 / 900 点）**用于毫秒级实时波形与 30s 滑窗计算，**1m 降采样环（6~24 小时）**用于长周期趋势切换，外加精确抢占事件环。
+* **零数据库内存 Ring Buffer**：每节点内置双层定长环形缓冲——**1s 高频环（15 分钟 / 900 点，支持 `1分 / 5分 / 15分` 秒级窗）**用于毫秒级实时波形与 30s 滑窗计算，**1m 降采样环（默认保留 24 小时，支持 `1时 / 6时 / 24时` 趋势窗）**，外加精确抢占事件环。
 * **vLLM V0 / V1 全自动兼容与防呆保护**：
   * 自动兼容 `kv_cache_usage_perc` / `gpu_cache_usage_perc`、`prefix_cache_*` / `gpu_prefix_cache_*`、`inter_token_latency_seconds_bucket` / `time_per_output_token_seconds_bucket` 与多 `engine` 标签聚合。
   * **首次采集基线归零**（防止将历史累计抢占/Token 误判为瞬时暴增）与 **容器重启重置保护**（识别 `curr < prev` 或 `*_created` 变更，彻底消除负值尖刺）。
@@ -134,7 +134,7 @@ docker compose up -d
 | `--port` | `8080` | HTTP 服务监听端口 |
 | `--interval` | `1s` | 指标轮询与 SSE 推送间隔（支持 Go Duration 格式，最低 `200ms`） |
 | `--timeout` | `2s` | 单节点单次 `/metrics` HTTP 请求超时时间 |
-| `--retention-hours` | `6` | 1 分钟降采样环保留时长（范围 `6` ~ `24` 小时） |
+| `--retention-hours` | `24` | 1 分钟降采样环保留时长（范围 `6` ~ `24` 小时） |
 
 ---
 
@@ -152,7 +152,7 @@ scrape:
   timeout: 2s
 
 # 1 分钟降采样环保留时长（6 ~ 24 小时）
-retention_hours: 6
+retention_hours: 24
 
 nodes:
   - id: qwen3-a100
@@ -220,7 +220,7 @@ flowchart LR
 | --- | --- |
 | `GET /api/health` | 健康检查，返回运行状态与是否处于 `--mock` 模式 |
 | `GET /api/nodes` | 返回所有节点摘要、集群汇总摘要及健康状态 |
-| `GET /api/snapshot?node={id\|all}&range=15m\|6h` | 返回指定节点（或 `all` 集群聚合）的历史 Ring Buffer 快照与抢占事件列表 |
+| `GET /api/snapshot?node={id\|all}&range=1m\|5m\|15m\|1h\|6h\|24h` | 返回指定节点（或 `all` 集群聚合）的历史 Ring Buffer 快照与抢占事件列表 |
 | `GET /api/stream` | SSE 长连接（`event: tick`），每秒推送全节点与集群最新状态帧 |
 | `POST /api/nodes` | 运行时动态添加临时监控节点（请求体 `{ name, url, headers }`） |
 | `DELETE /api/nodes/{id}` | 运行时移除动态添加的临时监控节点 |

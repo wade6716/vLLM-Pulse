@@ -798,15 +798,47 @@ func (r *Registry) ClusterSummary() NodeSummary {
 	return cluster
 }
 
+func parseTimeRange(rangeStr string) (canonical string, useLowFreq bool, windowMs int64) {
+	switch rangeStr {
+	case "1m":
+		return "1m", false, 60 * 1000
+	case "5m":
+		return "5m", false, 5 * 60 * 1000
+	case "15m", "":
+		return "15m", false, 15 * 60 * 1000
+	case "1h":
+		return "1h", true, 60 * 60 * 1000
+	case "6h":
+		return "6h", true, 6 * 60 * 60 * 1000
+	case "24h":
+		return "24h", true, 24 * 60 * 60 * 1000
+	default:
+		return "15m", false, 15 * 60 * 1000
+	}
+}
+
+func slicePointsByWindow(pts []MetricPoint, windowMs int64) []MetricPoint {
+	if len(pts) == 0 || windowMs <= 0 {
+		return pts
+	}
+	cutoff := pts[len(pts)-1].TimestampMs - windowMs
+	start := 0
+	for start < len(pts) && pts[start].TimestampMs < cutoff {
+		start++
+	}
+	if start == 0 {
+		return pts
+	}
+	return pts[start:]
+}
+
 // Snapshot returns historical points and preemption events for a specific node ID or "all".
 func (r *Registry) Snapshot(nodeID, rangeStr string) (SnapshotResponse, bool) {
-	if rangeStr != "6h" {
-		rangeStr = "15m"
-	}
+	canonicalRange, useLowFreq, windowMs := parseTimeRange(rangeStr)
 	summaries := r.ListSummaries()
 
 	if nodeID == "" || nodeID == "all" {
-		return r.clusterSnapshot(rangeStr, summaries), true
+		return r.clusterSnapshot(canonicalRange, useLowFreq, windowMs, summaries), true
 	}
 
 	eng, ok := r.Get(nodeID)
@@ -815,11 +847,12 @@ func (r *Registry) Snapshot(nodeID, rangeStr string) (SnapshotResponse, bool) {
 	}
 
 	var pts []MetricPoint
-	if rangeStr == "6h" {
+	if useLowFreq {
 		pts = eng.ring.LowFreqPoints()
 	} else {
 		pts = eng.ring.HighFreqPoints()
 	}
+	pts = slicePointsByWindow(pts, windowMs)
 
 	var minTs int64
 	if len(pts) > 0 {
@@ -829,7 +862,7 @@ func (r *Registry) Snapshot(nodeID, rangeStr string) (SnapshotResponse, bool) {
 
 	return SnapshotResponse{
 		NodeID:      nodeID,
-		Range:       rangeStr,
+		Range:       canonicalRange,
 		Summary:     eng.Summary(),
 		Points:      pts,
 		Preemptions: preemptions,
@@ -837,7 +870,7 @@ func (r *Registry) Snapshot(nodeID, rangeStr string) (SnapshotResponse, bool) {
 	}, true
 }
 
-func (r *Registry) clusterSnapshot(rangeStr string, summaries []NodeSummary) SnapshotResponse {
+func (r *Registry) clusterSnapshot(rangeStr string, useLowFreq bool, windowMs int64, summaries []NodeSummary) SnapshotResponse {
 	r.mu.RLock()
 	engines := make([]*NodeEngine, 0, len(r.order))
 	for _, id := range r.order {
@@ -848,51 +881,47 @@ func (r *Registry) clusterSnapshot(rangeStr string, summaries []NodeSummary) Sna
 	r.mu.RUnlock()
 
 	bucketMs := int64(1000)
-	if rangeStr == "6h" {
+	if useLowFreq {
 		bucketMs = 60000
 	}
 
 	type bucketAccum struct {
-		ts               int64
-		count            float64
-		gen              float64
-		prompt           float64
-		running          float64
-		waiting          float64
-		waitingCap       float64
-		waitingDef       float64
-		hasReason        bool
-		sumKV            float64
-		maxKV            float64
-		deltaPre         float64
-		totalPre         float64
-		prefixRateSum    float64
-		prefixActiveCnt  float64
-		ttftP50Sum       float64
-		ttftP50Cnt       float64
-		ttftP95Sum       float64
-		ttftP95Cnt       float64
-		itlP50Sum        float64
-		itlP50Cnt        float64
-		itlP95Sum        float64
-		itlP95Cnt        float64
+		ts              int64
+		count           float64
+		gen             float64
+		prompt          float64
+		running         float64
+		waiting         float64
+		waitingCap      float64
+		waitingDef      float64
+		hasReason       bool
+		sumKV           float64
+		maxKV           float64
+		deltaPre        float64
+		totalPre        float64
+		prefixRateSum   float64
+		prefixActiveCnt float64
+		ttftP50Sum      float64
+		ttftP50Cnt      float64
+		ttftP95Sum      float64
+		ttftP95Cnt      float64
+		itlP50Sum       float64
+		itlP50Cnt       float64
+		itlP95Sum       float64
+		itlP95Cnt       float64
 	}
 
 	buckets := make(map[int64]*bucketAccum)
-	var minTs int64
 
 	for _, e := range engines {
 		var pts []MetricPoint
-		if rangeStr == "6h" {
+		if useLowFreq {
 			pts = e.ring.LowFreqPoints()
 		} else {
 			pts = e.ring.HighFreqPoints()
 		}
 		for _, p := range pts {
 			bTs := (p.TimestampMs / bucketMs) * bucketMs
-			if minTs == 0 || bTs < minTs {
-				minTs = bTs
-			}
 			acc := buckets[bTs]
 			if acc == nil {
 				acc = &bucketAccum{ts: bTs}
@@ -983,6 +1012,12 @@ func (r *Registry) clusterSnapshot(rangeStr string, summaries []NodeSummary) Sna
 			pt.ItlP95Ms = &v
 		}
 		points = append(points, pt)
+	}
+
+	points = slicePointsByWindow(points, windowMs)
+	var minTs int64
+	if len(points) > 0 {
+		minTs = points[0].TimestampMs
 	}
 
 	var allPreemptions []PreemptionEvent

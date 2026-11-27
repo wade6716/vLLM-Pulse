@@ -206,3 +206,49 @@ vllm:spec_decode_num_accepted_tokens_per_pos_total{engine="0",position="1"} 140
 		t.Fatalf("unexpected per-position rates: %+v", pt.SpecDecode.PerPosition)
 	}
 }
+
+func TestSnapshotTimeRangeSlicing(t *testing.T) {
+	reg := NewRegistry([]config.NodeConfig{{ID: "n1", Name: "n1", URL: "http://n1/metrics"}}, 24)
+	eng, ok := reg.Get("n1")
+	if !ok {
+		t.Fatal("missing n1 engine")
+	}
+
+	baseTs := int64(1700000000000)
+	// Push 10 minutes (600 seconds) of samples
+	for i := 0; i < 600; i++ {
+		ts := baseTs + int64(i)*1000
+		pre := 0.0
+		if i == 100 || i == 580 {
+			pre = float64(i)
+		}
+		eng.Ingest(ts, []promparse.Sample{
+			{Name: "vllm:num_requests_running", Labels: map[string]string{"engine": "0"}, Value: 4},
+			{Name: "vllm:kv_cache_usage_perc", Labels: map[string]string{"engine": "0"}, Value: 0.4},
+			{Name: "vllm:num_preemptions_total", Labels: map[string]string{"engine": "0"}, Value: 10 + pre},
+		}, 5)
+	}
+
+	snap1m, ok := reg.Snapshot("n1", "1m")
+	if !ok || snap1m.Range != "1m" || len(snap1m.Points) != 61 {
+		t.Fatalf("expected 1m range with 61 points (0..60s inclusive), got ok=%v range=%s len=%d", ok, snap1m.Range, len(snap1m.Points))
+	}
+	if len(snap1m.Preemptions) != 1 {
+		t.Fatalf("expected only recent preemption event inside 1m window, got %d", len(snap1m.Preemptions))
+	}
+
+	snap5m, _ := reg.Snapshot("n1", "5m")
+	if snap5m.Range != "5m" || len(snap5m.Points) != 301 {
+		t.Fatalf("expected 5m range with 301 points, got range=%s len=%d", snap5m.Range, len(snap5m.Points))
+	}
+
+	snap15m, _ := reg.Snapshot("all", "15m")
+	if snap15m.Range != "15m" || len(snap15m.Points) != 600 {
+		t.Fatalf("expected cluster 15m range with 600 points, got range=%s len=%d", snap15m.Range, len(snap15m.Points))
+	}
+
+	snap24h, _ := reg.Snapshot("n1", "24h")
+	if snap24h.Range != "24h" || len(snap24h.Points) < 10 {
+		t.Fatalf("expected 24h low-freq range >= 10 minute buckets, got range=%s len=%d", snap24h.Range, len(snap24h.Points))
+	}
+}

@@ -48,7 +48,7 @@ func main() {
 	flag.IntVar(&port, "port", 0, "HTTP listen port (default 8080)")
 	flag.DurationVar(&interval, "interval", 0, "Scrape interval (default 1s)")
 	flag.DurationVar(&timeout, "timeout", 0, "Per-target scrape timeout (default 2s)")
-	flag.IntVar(&retentionHours, "retention-hours", 0, "1-minute ring buffer retention hours (6..24, default 6)")
+	flag.IntVar(&retentionHours, "retention-hours", 0, "1-minute ring buffer retention hours (6..24, default 24)")
 	flag.BoolVar(&mockMode, "mock", false, "Run with built-in 3-node mock vLLM metrics generator")
 	flag.Parse()
 

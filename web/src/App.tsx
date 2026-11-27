@@ -73,7 +73,7 @@ export function App() {
 
   return (
     <main
-      className={`h-screen w-screen overflow-hidden flex flex-col p-3.5 gap-3 select-none transition-all duration-700 ${
+      className={`h-screen w-screen overflow-hidden flex flex-col p-3.5 gap-3 transition-all duration-700 ${
         isCritical ? 'apple-canvas-alert' : 'apple-canvas'
       }`}
     >

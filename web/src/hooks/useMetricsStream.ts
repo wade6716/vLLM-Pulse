@@ -22,8 +22,23 @@ interface UseMetricsStreamResult {
   deleteNode: (id: string) => Promise<void>;
 }
 
-const MAX_15M_POINTS = 900;
-const MAX_6H_POINTS = 1440;
+const RANGE_CONFIG: Record<TimeRange, { lowFreq: boolean; windowMs: number; maxPoints: number }> = {
+  '1m': { lowFreq: false, windowMs: 60_000, maxPoints: 65 },
+  '5m': { lowFreq: false, windowMs: 300_000, maxPoints: 305 },
+  '15m': { lowFreq: false, windowMs: 900_000, maxPoints: 905 },
+  '1h': { lowFreq: true, windowMs: 3_600_000, maxPoints: 65 },
+  '6h': { lowFreq: true, windowMs: 21_600_000, maxPoints: 365 },
+  '24h': { lowFreq: true, windowMs: 86_400_000, maxPoints: 1445 },
+};
+
+function prunePoints(pts: MetricPoint[], cutoffTs: number, maxPoints: number): MetricPoint[] {
+  let start = 0;
+  while (start < pts.length && pts[start].ts < cutoffTs) {
+    start++;
+  }
+  const sliced = start > 0 ? pts.slice(start) : pts;
+  return sliced.length > maxPoints ? sliced.slice(sliced.length - maxPoints) : sliced;
+}
 
 export function useMetricsStream(activeNodeId: string, range: TimeRange): UseMetricsStreamResult {
   const [nodes, setNodes] = useState<NodeSummary[]>([]);
@@ -52,7 +67,7 @@ export function useMetricsStream(activeNodeId: string, range: TimeRange): UseMet
       setPoints(data.points ?? []);
       setPreemptions(data.preemptions ?? []);
     } catch {
-      // SSE reconnect or retry will recover
+      // SSE 重连时会自动恢复
     }
   }, []);
 
@@ -65,7 +80,7 @@ export function useMetricsStream(activeNodeId: string, range: TimeRange): UseMet
       setClusterSummary(data.cluster ?? null);
       setMockMode(Boolean(data.mock));
     } catch {
-      // ignore transient error
+      // 忽略瞬时异常
     }
   }, []);
 
@@ -104,6 +119,7 @@ export function useMetricsStream(activeNodeId: string, range: TimeRange): UseMet
 
         const curNode = activeNodeRef.current;
         const curRange = rangeRef.current;
+        const cfg = RANGE_CONFIG[curRange] ?? RANGE_CONFIG['15m'];
 
         const targetSummary =
           curNode === 'all'
@@ -117,25 +133,26 @@ export function useMetricsStream(activeNodeId: string, range: TimeRange): UseMet
         const latest = targetSummary?.latest;
         if (latest) {
           setPoints((prev) => {
-            if (curRange === '15m') {
+            if (!cfg.lowFreq) {
+              let next: MetricPoint[];
               if (prev.length > 0 && prev[prev.length - 1].ts === latest.ts) {
-                const copy = prev.slice();
-                copy[copy.length - 1] = latest;
-                return copy;
+                next = prev.slice();
+                next[next.length - 1] = latest;
+              } else {
+                next = [...prev, latest];
               }
-              const next = [...prev, latest];
-              return next.length > MAX_15M_POINTS ? next.slice(next.length - MAX_15M_POINTS) : next;
+              return prunePoints(next, latest.ts - cfg.windowMs, cfg.maxPoints);
             }
-            // 6h downsampled view: update the current 1-minute bucket or append a new minute bucket.
             const minuteBucket = Math.floor(latest.ts / 60000) * 60000;
             const bucketPoint: MetricPoint = { ...latest, ts: minuteBucket };
+            let next: MetricPoint[];
             if (prev.length > 0 && prev[prev.length - 1].ts === minuteBucket) {
-              const copy = prev.slice();
-              copy[copy.length - 1] = bucketPoint;
-              return copy;
+              next = prev.slice();
+              next[next.length - 1] = bucketPoint;
+            } else {
+              next = [...prev, bucketPoint];
             }
-            const next = [...prev, bucketPoint];
-            return next.length > MAX_6H_POINTS ? next.slice(next.length - MAX_6H_POINTS) : next;
+            return prunePoints(next, minuteBucket - cfg.windowMs, cfg.maxPoints);
           });
         }
 
@@ -145,14 +162,15 @@ export function useMetricsStream(activeNodeId: string, range: TimeRange): UseMet
               ? frame.newPreemptions
               : frame.newPreemptions.filter((p) => p.nodeId === curNode);
           if (matching.length > 0) {
+            const cutoff = (latest?.ts ?? frame.ts ?? Date.now()) - cfg.windowMs;
             setPreemptions((prev) => {
-              const next = [...prev, ...matching];
-              return next.length > 500 ? next.slice(next.length - 500) : next;
+              const merged = [...prev, ...matching].filter((e) => e.ts >= cutoff);
+              return merged.length > 500 ? merged.slice(merged.length - 500) : merged;
             });
           }
         }
       } catch {
-        // ignore malformed frame
+        // 忽略异常帧
       }
     });
 
@@ -171,7 +189,7 @@ export function useMetricsStream(activeNodeId: string, range: TimeRange): UseMet
       });
       const body = await res.json();
       if (!res.ok) {
-        throw new Error(body.error || 'Failed to add node');
+        throw new Error(body.error || '添加节点失败');
       }
       await refreshNodes();
       return body as NodeSummary;
@@ -184,7 +202,7 @@ export function useMetricsStream(activeNodeId: string, range: TimeRange): UseMet
       const res = await fetch(`/api/nodes/${encodeURIComponent(id)}`, { method: 'DELETE' });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || 'Failed to delete node');
+        throw new Error(body.error || '移除节点失败');
       }
       await refreshNodes();
     },

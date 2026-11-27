@@ -8,7 +8,7 @@ scrape:
   timeout: 2s
 
 # Downsampled 1-minute ring buffer retention in hours (6..24)
-retention_hours: 6
+retention_hours: 24
 
 nodes:
   - id: qwen3-a100

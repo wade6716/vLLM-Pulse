@@ -64,9 +64,11 @@ export interface NodeSummary {
   latest: MetricPoint | null;
 }
 
+export type TimeRange = '1m' | '5m' | '15m' | '1h' | '6h' | '24h';
+
 export interface SnapshotResponse {
   nodeId: string;
-  range: '15m' | '6h';
+  range: TimeRange;
   summary: NodeSummary;
   points: MetricPoint[];
   preemptions: PreemptionEvent[];
@@ -79,5 +81,3 @@ export interface StreamFrame {
   cluster: NodeSummary;
   newPreemptions?: PreemptionEvent[];
 }
-
-export type TimeRange = '15m' | '6h';
