@@ -4,6 +4,7 @@ import type * as echarts from 'echarts';
 import type { NodeSummary } from '../types';
 import { formatAgo, kvThresholdColor, kvThresholdTextClass } from '../utils/format';
 import { EChartBox } from './EChartBox';
+import { InfoTip } from './InfoTip';
 
 interface KvPreemptionPanelProps {
   summary: NodeSummary | null;
@@ -129,34 +130,39 @@ export function KvPreemptionPanel({ summary, nowMs }: KvPreemptionPanelProps) {
 
   return (
     <div className={`flex flex-col justify-between p-3.5 rounded-xl border transition-colors min-h-0 ${cardTone}`}>
-      {/* Header */}
+      {/* 标题栏 */}
       <div className="flex items-center justify-between gap-2 shrink-0">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold uppercase tracking-wider text-slate-300">
-            KV Cache Pressure
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs font-semibold tracking-wider text-slate-300">
+            KV Cache 显存压力
           </span>
+          <InfoTip
+            title="KV Cache 显存块占用率"
+            formula="vllm:kv_cache_usage_perc / gpu_cache_usage_perc"
+            description="vLLM 显存中 KV Cache 块的使用比例。70%～85% 进入琥珀预警区，≥ 85% 进入红色高危区，极易触发容量排队与请求抢占重算。"
+          />
           {summary?.id === 'all' && maxKvPct > kvPct + 1 && (
             <span className={`text-[11px] mono-nums px-1.5 py-0.5 rounded bg-slate-800 ${kvThresholdTextClass(maxKvPct)}`}>
-              Peak {maxKvPct.toFixed(1)}%
+              峰值 {maxKvPct.toFixed(1)}%
             </span>
           )}
         </div>
-        <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
+        <div className="flex items-center gap-1.5 text-[10px] text-slate-400 shrink-0">
           <span className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/25">
-            Warn 70%
+            预警 70%
           </span>
           <span className="px-1.5 py-0.5 rounded bg-red-500/10 text-red-300 border border-red-500/25">
-            Crit 85%
+            告警 85%
           </span>
         </div>
       </div>
 
-      {/* Semi-circular Gauge */}
+      {/* 半圆压力仪表盘 */}
       <div className="flex-1 min-h-0 w-full">
         <EChartBox option={gaugeOption} />
       </div>
 
-      {/* Preemption Pulse Strip */}
+      {/* 抢占事件脉冲区 */}
       <div
         className={`shrink-0 flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg border transition-colors ${
           pulseActive
@@ -182,17 +188,22 @@ export function KvPreemptionPanel({ summary, nowMs }: KvPreemptionPanelProps) {
 
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                Preemptions
+              <span className="text-[11px] font-semibold tracking-wider text-slate-400">
+                抢占事件
               </span>
+              <InfoTip
+                title="请求抢占事件 (Preemptions)"
+                formula="vllm:num_preemptions_total (周期增量 Δ + 累计)"
+                description="当 KV Cache 空间耗尽时，vLLM 会被迫中断运行中请求并回收其显存块，稍后重新计算或换出，导致尾部延迟剧增。首次采集仅作基线不误报，容器重启自动重置。"
+              />
               {pulseActive && (
                 <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded bg-red-500 text-white mono-nums">
-                  <Zap className="w-2.5 h-2.5" />+{Math.round(pulseDelta)}
+                  <Zap className="w-2.5 h-2.5" />+{Math.round(pulseDelta)} 次
                 </span>
               )}
             </div>
             <div className="text-xs text-slate-400 truncate mono-nums">
-              Last event: <span className="text-slate-200">{formatAgo(lastPreemptTs, nowMs)}</span>
+              最近发生：<span className="text-slate-200">{formatAgo(lastPreemptTs, nowMs)}</span>
             </div>
           </div>
         </div>
@@ -201,7 +212,7 @@ export function KvPreemptionPanel({ summary, nowMs }: KvPreemptionPanelProps) {
           <div className="text-lg font-bold text-slate-100 mono-nums leading-tight">
             {Math.round(totalPreempt).toLocaleString('en-US')}
           </div>
-          <div className="text-[10px] uppercase tracking-wider text-slate-500">Cumulative</div>
+          <div className="text-[10px] tracking-wider text-slate-500">累计次数</div>
         </div>
       </div>
     </div>

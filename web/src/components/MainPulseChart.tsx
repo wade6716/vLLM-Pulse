@@ -3,6 +3,7 @@ import type * as echarts from 'echarts';
 import type { MetricPoint, PreemptionEvent, TimeRange } from '../types';
 import { formatTimeClock } from '../utils/format';
 import { EChartBox } from './EChartBox';
+import { InfoTip } from './InfoTip';
 
 interface MainPulseChartProps {
   points: MetricPoint[];
@@ -21,7 +22,7 @@ export function MainPulseChart({ points, preemptions, range }: MainPulseChartPro
     const minTs = points.length > 0 ? points[0].ts : 0;
     const maxTs = points.length > 0 ? points[points.length - 1].ts : 0;
 
-    // Group preemptions within visible window so overlapping timestamps stack cleanly
+    // 仅渲染当前可见时间窗内的抢占标记线
     const visiblePreemptions = preemptions.filter((ev) => ev.ts >= minTs && ev.ts <= maxTs + 1000);
     const preemptMap = new Map<number, PreemptionEvent[]>();
     for (const ev of visiblePreemptions) {
@@ -34,7 +35,7 @@ export function MainPulseChart({ points, preemptions, range }: MainPulseChartPro
       const totalDelta = evs.reduce((acc, e) => acc + e.delta, 0);
       return {
         xAxis: ts,
-        name: `Preemption +${totalDelta}`,
+        name: `抢占 +${totalDelta}`,
         label: {
           show: true,
           formatter: `+${Math.round(totalDelta)}`,
@@ -85,12 +86,11 @@ export function MainPulseChart({ points, preemptions, range }: MainPulseChartPro
               <span style="font-family:monospace;font-weight:600">${val}${unit}</span>
             </div>`;
           }
-          // Check if any preemption occurred within 1s of hovered timestamp
           const nearEvs = visiblePreemptions.filter((e) => Math.abs(e.ts - ts) <= (withSec ? 1000 : 30000));
           if (nearEvs.length > 0) {
             const sumD = nearEvs.reduce((a, b) => a + b.delta, 0);
             html += `<div style="margin-top:5px;padding-top:4px;border-top:1px solid #334155;color:#F87171;font-weight:700">
-              Preemption Spike: +${Math.round(sumD)} (KV ${nearEvs[0].kvCachePct.toFixed(1)}%)
+              抢占尖刺：+${Math.round(sumD)} 次（当时 KV ${nearEvs[0].kvCachePct.toFixed(1)}%）
             </div>`;
           }
           return html;
@@ -130,7 +130,7 @@ export function MainPulseChart({ points, preemptions, range }: MainPulseChartPro
       ],
       series: [
         {
-          name: 'Generation',
+          name: '生成吞吐',
           type: 'line',
           yAxisIndex: 0,
           data: genSeries,
@@ -157,7 +157,7 @@ export function MainPulseChart({ points, preemptions, range }: MainPulseChartPro
           },
         },
         {
-          name: 'Prompt',
+          name: '提示词吞吐',
           type: 'line',
           yAxisIndex: 0,
           data: promptSeries,
@@ -179,7 +179,7 @@ export function MainPulseChart({ points, preemptions, range }: MainPulseChartPro
           },
         },
         {
-          name: 'KV Cache %',
+          name: 'KV 使用率',
           type: 'line',
           yAxisIndex: 1,
           data: kvSeries,
@@ -203,25 +203,30 @@ export function MainPulseChart({ points, preemptions, range }: MainPulseChartPro
   return (
     <div className="flex flex-col p-3.5 rounded-xl bg-[#111827]/85 border border-slate-800/80 min-h-0">
       <div className="flex items-center justify-between gap-2 mb-1 shrink-0">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold uppercase tracking-wider text-slate-300">
-            Throughput & KV Cache Pulse
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs font-semibold tracking-wider text-slate-300">
+            吞吐与 KV 压力主脉搏
           </span>
-          <span className="text-[11px] text-slate-500">Dual-axis real-time waveform</span>
+          <InfoTip
+            title="吞吐量与 KV Cache 关联波形"
+            formula="左轴：Token 吞吐 (tok/s) · 右轴：KV 使用率 (%)"
+            description="将生成/提示词吞吐与 KV Cache 使用率叠加展示，配合 70%/85% 警戒虚线与抢占红线标记，直观还原显存打满导致抢占及吞吐波动的因果关系。"
+          />
+          <span className="text-[11px] text-slate-500 ml-1">双轴实时波形</span>
         </div>
 
-        <div className="flex items-center gap-3 text-[11px] text-slate-300">
+        <div className="flex items-center gap-3 text-[11px] text-slate-300 shrink-0">
           <span className="flex items-center gap-1.5">
-            <span className="w-2.5 h-0.5 bg-emerald-400 inline-block" /> Generation
+            <span className="w-2.5 h-0.5 bg-emerald-400 inline-block" /> 生成吞吐
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="w-2.5 h-0.5 bg-cyan-400 inline-block" /> Prompt
+            <span className="w-2.5 h-0.5 bg-cyan-400 inline-block" /> 提示词吞吐
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="w-2.5 h-0.5 border-t-2 border-dashed border-amber-400 inline-block" /> KV %
+            <span className="w-2.5 h-0.5 border-t-2 border-dashed border-amber-400 inline-block" /> KV 使用率
           </span>
           <span className="flex items-center gap-1.5 text-red-400">
-            <span className="w-0.5 h-3 bg-red-500 inline-block" /> Preemption
+            <span className="w-0.5 h-3 bg-red-500 inline-block" /> 抢占标记
           </span>
         </div>
       </div>
