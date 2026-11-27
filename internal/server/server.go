@@ -11,6 +11,7 @@ import (
 	"github.com/wade6716/vllm-pulse/internal/config"
 	"github.com/wade6716/vllm-pulse/internal/hub"
 	"github.com/wade6716/vllm-pulse/internal/metrics"
+	"github.com/wade6716/vllm-pulse/internal/version"
 )
 
 // Server exposes the REST API, SSE stream, and embedded frontend SPA.
@@ -52,8 +53,11 @@ func (s *Server) routes() {
 
 func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
-		"status": "ok",
-		"mock":   s.mockMode,
+		"status":    "ok",
+		"mock":      s.mockMode,
+		"version":   version.Display(),
+		"commit":    version.Commit,
+		"buildDate": version.BuildDate,
 	})
 }
 
@@ -62,6 +66,8 @@ func (s *Server) handleListNodes(w http.ResponseWriter, _ *http.Request) {
 		"nodes":   s.registry.ListSummaries(),
 		"cluster": s.registry.ClusterSummary(),
 		"mock":    s.mockMode,
+		"version": version.Display(),
+		"commit":  version.Commit,
 	})
 }
 

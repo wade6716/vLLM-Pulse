@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"os/signal"
 	"strings"
 	"syscall"
@@ -17,6 +18,7 @@ import (
 	"github.com/wade6716/vllm-pulse/internal/hub"
 	"github.com/wade6716/vllm-pulse/internal/metrics"
 	"github.com/wade6716/vllm-pulse/internal/server"
+	"github.com/wade6716/vllm-pulse/internal/version"
 )
 
 type stringSliceFlag []string
@@ -40,6 +42,8 @@ func main() {
 		timeout        time.Duration
 		retentionHours int
 		mockMode       bool
+		showVersion    bool
+		showVerShort   bool
 	)
 
 	flag.StringVar(&configPath, "config", "", "Path to YAML config file")
@@ -50,7 +54,14 @@ func main() {
 	flag.DurationVar(&timeout, "timeout", 0, "Per-target scrape timeout (default 2s)")
 	flag.IntVar(&retentionHours, "retention-hours", 0, "1-minute ring buffer retention hours (6..24, default 24)")
 	flag.BoolVar(&mockMode, "mock", false, "Run with built-in 3-node mock vLLM metrics generator")
+	flag.BoolVar(&showVersion, "version", false, "Print version information and exit")
+	flag.BoolVar(&showVerShort, "v", false, "Print version information and exit")
 	flag.Parse()
+
+	if showVersion || showVerShort {
+		fmt.Println(version.String())
+		os.Exit(0)
+	}
 
 	cfg := config.DefaultConfig()
 	if configPath != "" {
@@ -120,7 +131,7 @@ func main() {
 	}
 
 	go func() {
-		log.Printf("vLLM-Pulse NOC dashboard listening on http://%s", addr)
+		log.Printf("vLLM-Pulse %s NOC dashboard listening on http://%s", version.Display(), addr)
 		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("http server error: %v", err)
 		}

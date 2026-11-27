@@ -15,6 +15,8 @@ interface UseMetricsStreamResult {
   points: MetricPoint[];
   preemptions: PreemptionEvent[];
   mockMode: boolean;
+  appVersion: string;
+  appCommit: string;
   sseConnected: boolean;
   nowMs: number;
   refreshNodes: () => Promise<void>;
@@ -47,6 +49,8 @@ export function useMetricsStream(activeNodeId: string, range: TimeRange): UseMet
   const [points, setPoints] = useState<MetricPoint[]>([]);
   const [preemptions, setPreemptions] = useState<PreemptionEvent[]>([]);
   const [mockMode, setMockMode] = useState(false);
+  const [appVersion, setAppVersion] = useState('');
+  const [appCommit, setAppCommit] = useState('');
   const [sseConnected, setSseConnected] = useState(false);
   const [nowMs, setNowMs] = useState(() => Date.now());
 
@@ -75,10 +79,13 @@ export function useMetricsStream(activeNodeId: string, range: TimeRange): UseMet
     try {
       const res = await fetch('/api/nodes');
       if (!res.ok) return;
-      const data: { nodes: NodeSummary[]; cluster: NodeSummary; mock: boolean } = await res.json();
+      const data: { nodes: NodeSummary[]; cluster: NodeSummary; mock: boolean; version?: string; commit?: string } =
+        await res.json();
       setNodes(data.nodes ?? []);
       setClusterSummary(data.cluster ?? null);
       setMockMode(Boolean(data.mock));
+      if (data.version) setAppVersion(data.version);
+      if (data.commit) setAppCommit(data.commit);
     } catch {
       // 忽略瞬时异常
     }
@@ -216,6 +223,8 @@ export function useMetricsStream(activeNodeId: string, range: TimeRange): UseMet
     points,
     preemptions,
     mockMode,
+    appVersion,
+    appCommit,
     sseConnected,
     nowMs,
     refreshNodes,

@@ -1,0 +1,143 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "README.md"
+      - "CHANGELOG.md"
+      - "LICENSE"
+      - "VERSION"
+      - "docs/**"
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - "README.md"
+      - "CHANGELOG.md"
+      - "LICENSE"
+      - "docs/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  test:
+    name: Test Frontend & Go Backend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: web/package-lock.json
+
+      - name: Typecheck & Build Frontend
+        working-directory: web
+        run: |
+          npm ci
+          npm run typecheck
+          npm run build
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache-dependency-path: go.sum
+
+      - name: Run Go Unit Tests (with -race)
+        run: go test -v -race ./...
+
+      - name: Verify Static Linux Binary Size (< 25 MB)
+        run: |
+          VER="v$(tr -d ' \t\r\n' < VERSION)"
+          SHORT_SHA="${GITHUB_SHA::7}"
+          BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath \
+            -ldflags="-s -w -X github.com/wade6716/vllm-pulse/internal/version.Version=${VER} -X github.com/wade6716/vllm-pulse/internal/version.Commit=${SHORT_SHA} -X github.com/wade6716/vllm-pulse/internal/version.BuildDate=${BUILD_DATE}" \
+            -o vllm-pulse-linux ./cmd/vllm-pulse
+          ./vllm-pulse-linux --version
+          SIZE_BYTES=$(stat -c%s vllm-pulse-linux)
+          echo "Binary size: ${SIZE_BYTES} bytes"
+          test "${SIZE_BYTES}" -lt 26214400
+
+  docker-edge:
+    name: Build Edge Image (< 30 MB)
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Prepare Metadata
+        id: meta
+        run: |
+          IMAGE="ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
+          SHORT_SHA="${GITHUB_SHA::7}"
+          VER="v$(tr -d ' \t\r\n' < VERSION)-edge.${SHORT_SHA}"
+          BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
+          echo "short_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          echo "version=${VER}" >> "$GITHUB_OUTPUT"
+          echo "build_date=${BUILD_DATE}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build single-arch image on PR & assert size < 30 MB
+        if: github.event_name == 'pull_request'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: ${{ steps.meta.outputs.image }}:pr-${{ github.event.pull_request.number }}
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
+            COMMIT=${{ steps.meta.outputs.short_sha }}
+            BUILD_DATE=${{ steps.meta.outputs.build_date }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Assert Docker image size < 30 MB (PR)
+        if: github.event_name == 'pull_request'
+        run: |
+          SIZE=$(docker image inspect "${{ steps.meta.outputs.image }}:pr-${{ github.event.pull_request.number }}" --format='{{.Size}}')
+          echo "Docker image size: ${SIZE} bytes"
+          test "${SIZE}" -lt 31457280
+
+      - name: Build & Push multi-arch edge image to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.image }}:edge
+            ${{ steps.meta.outputs.image }}:sha-${{ steps.meta.outputs.short_sha }}
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
+            COMMIT=${{ steps.meta.outputs.short_sha }}
+            BUILD_DATE=${{ steps.meta.outputs.build_date }}
+          labels: |
+            org.opencontainers.image.version=${{ steps.meta.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.created=${{ steps.meta.outputs.build_date }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

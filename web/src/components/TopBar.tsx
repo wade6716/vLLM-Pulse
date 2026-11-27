@@ -15,6 +15,8 @@ interface TopBarProps {
   lockedByAlert: boolean;
   secondsRemaining: number;
   mockMode: boolean;
+  appVersion: string;
+  appCommit: string;
   sseConnected: boolean;
   isFullscreen: boolean;
   onToggleFullscreen: () => void;
@@ -42,6 +44,8 @@ export function TopBar({
   lockedByAlert,
   secondsRemaining,
   mockMode,
+  appVersion,
+  appCommit,
   sseConnected,
   isFullscreen,
   onToggleFullscreen,
@@ -60,6 +64,14 @@ export function TopBar({
           </div>
           <div className="flex items-center gap-1.5">
             <span className="text-[15px] font-semibold tracking-tight text-[#F5F5F7]">vLLM-Pulse</span>
+            {appVersion && (
+              <span
+                className="text-[10px] font-medium text-white/35 tabular-nums"
+                title={appCommit && appCommit !== 'none' ? `版本 ${appVersion} (${appCommit})` : `版本 ${appVersion}`}
+              >
+                {appVersion}
+              </span>
+            )}
             {mockMode && (
               <span className="px-2 py-0.5 text-[10px] font-medium rounded-full bg-[#0A84FF]/15 text-[#64D2FF] select-none">
                 模拟模式

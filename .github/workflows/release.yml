@@ -1,0 +1,311 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "VERSION"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  check-version:
+    name: Validate VERSION & Tag
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.check.outputs.should_release }}
+      version: ${{ steps.check.outputs.version }}
+      major_minor: ${{ steps.check.outputs.major_minor }}
+      tag: ${{ steps.check.outputs.tag }}
+      is_prerelease: ${{ steps.check.outputs.is_prerelease }}
+      prev_tag: ${{ steps.check.outputs.prev_tag }}
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Inspect VERSION against existing Git tags
+        id: check
+        run: |
+          RAW=$(tr -d ' \t\r\n' < VERSION)
+          VER="${RAW#v}"
+          if ! [[ "$VER" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Invalid SemVer in VERSION: '$RAW' (expected e.g. 0.1.0 or 0.2.0-rc.1)"
+            exit 1
+          fi
+
+          TAG="v${VER}"
+          MAJOR_MINOR=$(echo "$VER" | sed -E 's/^([0-9]+\.[0-9]+)\..*/\1/')
+          PREV_TAG=$(git tag --list 'v*' --sort=-v:refname | head -n 1 || true)
+
+          if [[ "$VER" == *-* ]]; then
+            IS_PRE="true"
+          else
+            IS_PRE="false"
+          fi
+
+          if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
+            echo "Tag ${TAG} already exists; skipping release."
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Preparing release for ${TAG} (prerelease=${IS_PRE}, prev=${PREV_TAG})"
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "version=${VER}" >> "$GITHUB_OUTPUT"
+          echo "major_minor=${MAJOR_MINOR}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "is_prerelease=${IS_PRE}" >> "$GITHUB_OUTPUT"
+          echo "prev_tag=${PREV_TAG}" >> "$GITHUB_OUTPUT"
+
+  test:
+    name: Release Quality Gate
+    needs: check-version
+    if: needs.check-version.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: web/package-lock.json
+
+      - name: Typecheck & Build Frontend
+        working-directory: web
+        run: |
+          npm ci
+          npm run typecheck
+          npm run build
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache-dependency-path: go.sum
+
+      - name: Run Go Unit Tests (with -race)
+        run: go test -v -race ./...
+
+  tag:
+    name: Create & Push Git Tag
+    needs: [check-version, test]
+    if: needs.check-version.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Push Annotated Tag
+        run: |
+          TAG="${{ needs.check-version.outputs.tag }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "Release $TAG"
+          git push origin "$TAG"
+
+  docker-release:
+    name: Publish Multi-Arch Docker Image
+    needs: [check-version, tag]
+    if: needs.check-version.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute Docker Tags & Metadata
+        id: meta
+        run: |
+          IMAGE="ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
+          VER="${{ needs.check-version.outputs.version }}"
+          MM="${{ needs.check-version.outputs.major_minor }}"
+          TAG="${{ needs.check-version.outputs.tag }}"
+          IS_PRE="${{ needs.check-version.outputs.is_prerelease }}"
+          SHORT_SHA="${GITHUB_SHA::7}"
+          BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+          TAGS="${IMAGE}:${VER}"
+          if [[ "$IS_PRE" != "true" ]]; then
+            TAGS="${TAGS},${IMAGE}:${MM},${IMAGE}:latest"
+          fi
+
+          echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
+          echo "tags=${TAGS}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "short_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          echo "build_date=${BUILD_DATE}" >> "$GITHUB_OUTPUT"
+
+      - name: Build & Push Multi-Arch Image to GHCR
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          build-args: |
+            VERSION=${{ steps.meta.outputs.tag }}
+            COMMIT=${{ steps.meta.outputs.short_sha }}
+            BUILD_DATE=${{ steps.meta.outputs.build_date }}
+          labels: |
+            org.opencontainers.image.version=${{ steps.meta.outputs.tag }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.created=${{ steps.meta.outputs.build_date }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  github-release:
+    name: Build Archives & Publish GitHub Release
+    needs: [check-version, tag, docker-release]
+    if: needs.check-version.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.check-version.outputs.tag }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build Frontend
+        working-directory: web
+        run: npm ci && npm run build
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache-dependency-path: go.sum
+
+      - name: Cross-compile & Package 5 Platforms + SHA256 Checksums
+        run: |
+          TAG="${{ needs.check-version.outputs.tag }}"
+          SHORT_SHA="${GITHUB_SHA::7}"
+          BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          LDFLAGS="-s -w -X github.com/wade6716/vllm-pulse/internal/version.Version=${TAG} -X github.com/wade6716/vllm-pulse/internal/version.Commit=${SHORT_SHA} -X github.com/wade6716/vllm-pulse/internal/version.BuildDate=${BUILD_DATE}"
+
+          mkdir -p dist stage
+          build_archive() {
+            local os="$1" arch="$2" ext="$3"
+            local bin="vllm-pulse"
+            if [[ "$os" == "windows" ]]; then
+              bin="vllm-pulse.exe"
+            fi
+            local pkg="vllm-pulse-${TAG}-${os}-${arch}"
+            rm -rf stage/*
+            mkdir -p "stage/${pkg}/configs"
+            CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -trimpath -ldflags="$LDFLAGS" -o "stage/${pkg}/${bin}" ./cmd/vllm-pulse
+            if [[ "$os" == "linux" && "$arch" == "amd64" ]]; then
+              SIZE_BYTES=$(stat -c%s "stage/${pkg}/${bin}")
+              echo "Linux amd64 binary size: ${SIZE_BYTES} bytes"
+              test "${SIZE_BYTES}" -lt 26214400
+            fi
+            cp README.md LICENSE "stage/${pkg}/"
+            cp configs/config.example.yaml "stage/${pkg}/configs/"
+            if [[ "$ext" == "zip" ]]; then
+              (cd stage && zip -rq "../dist/${pkg}.zip" "${pkg}")
+            else
+              tar -C stage -czf "dist/${pkg}.tar.gz" "${pkg}"
+            fi
+          }
+
+          build_archive linux amd64 tar.gz
+          build_archive linux arm64 tar.gz
+          build_archive darwin amd64 tar.gz
+          build_archive darwin arm64 tar.gz
+          build_archive windows amd64 zip
+
+          (cd dist && sha256sum * > checksums.txt)
+          ls -lh dist/
+
+      - name: Extract Release Notes from CHANGELOG.md
+        id: notes
+        run: |
+          python3 - << 'EOF'
+          import os, re, pathlib
+
+          ver = os.environ["REL_VER"]
+          tag = os.environ["REL_TAG"]
+          prev_tag = os.environ["PREV_TAG"]
+          repo = os.environ["GITHUB_REPOSITORY"]
+          image = f"ghcr.io/{repo.lower()}"
+          is_pre = os.environ["IS_PRE"]
+
+          text = pathlib.Path("CHANGELOG.md").read_text(encoding="utf-8") if pathlib.Path("CHANGELOG.md").exists() else ""
+          pattern = re.compile(rf"^##\s+\[?v?{re.escape(ver)}\]?[^\n]*\n(.*?)(?=^##\s|\Z)", re.MULTILINE | re.DOTALL)
+          m = pattern.search(text)
+          body = m.group(1).strip() if m else ""
+
+          out_path = pathlib.Path(os.environ["GITHUB_OUTPUT"])
+          if body:
+              docker_tag = ver if is_pre == "true" else "latest"
+              footer = [
+                  "",
+                  "---",
+                  "",
+                  "### 🐳 Docker 镜像",
+                  "```bash",
+                  f"docker pull {image}:{ver}",
+                  f"docker run -d -p 8080:8080 {image}:{docker_tag} --mock --port 8080",
+                  "```",
+              ]
+              if prev_tag:
+                  footer.append(f"\n**完整变更对比**: https://github.com/{repo}/compare/{prev_tag}...{tag}")
+              pathlib.Path("release_notes.md").write_text(body + "\n" + "\n".join(footer) + "\n", encoding="utf-8")
+              with out_path.open("a", encoding="utf-8") as f:
+                  f.write("has_notes=true\n")
+          else:
+              with out_path.open("a", encoding="utf-8") as f:
+                  f.write("has_notes=false\n")
+          EOF
+        env:
+          REL_VER: ${{ needs.check-version.outputs.version }}
+          REL_TAG: ${{ needs.check-version.outputs.tag }}
+          PREV_TAG: ${{ needs.check-version.outputs.prev_tag }}
+          IS_PRE: ${{ needs.check-version.outputs.is_prerelease }}
+
+      - name: Publish GitHub Release (CHANGELOG Notes)
+        if: steps.notes.outputs.has_notes == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.check-version.outputs.tag }}
+          name: ${{ needs.check-version.outputs.tag }}
+          body_path: release_notes.md
+          prerelease: ${{ needs.check-version.outputs.is_prerelease == 'true' }}
+          files: dist/*
+
+      - name: Publish GitHub Release (Auto-Generated Notes Fallback)
+        if: steps.notes.outputs.has_notes != 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.check-version.outputs.tag }}
+          name: ${{ needs.check-version.outputs.tag }}
+          generate_release_notes: true
+          prerelease: ${{ needs.check-version.outputs.is_prerelease == 'true' }}
+          files: dist/*

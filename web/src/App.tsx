@@ -23,6 +23,8 @@ export function App() {
     points,
     preemptions,
     mockMode,
+    appVersion,
+    appCommit,
     sseConnected,
     nowMs,
     addNode,
@@ -90,6 +92,8 @@ export function App() {
         lockedByAlert={lockedByAlert}
         secondsRemaining={secondsRemaining}
         mockMode={mockMode}
+        appVersion={appVersion}
+        appCommit={appCommit}
         sseConnected={sseConnected}
         isFullscreen={isFullscreen}
         onToggleFullscreen={toggleFullscreen}

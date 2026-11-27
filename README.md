@@ -6,7 +6,8 @@
 
 仅通过远程轮询 vLLM 原生 `/metrics`（Prometheus 文本格式）驱动 · 无需 Prometheus / Grafana / 数据库 · 单镜像 < 15 MB
 
-[![CI & Docker](https://github.com/wade6716/vLLM-Pulse/actions/workflows/ci-docker.yml/badge.svg)](https://github.com/wade6716/vLLM-Pulse/actions/workflows/ci-docker.yml)
+[![CI](https://github.com/wade6716/vLLM-Pulse/actions/workflows/ci.yml/badge.svg)](https://github.com/wade6716/vLLM-Pulse/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/wade6716/vLLM-Pulse?include_prereleases&color=0A84FF)](https://github.com/wade6716/vLLM-Pulse/releases)
 [![Go Version](https://img.shields.io/badge/Go-1.24+-00ADD8?logo=go&logoColor=white)](https://go.dev/)
 [![Frontend](https://img.shields.io/badge/React-19%20%2B%20ECharts-0A84FF?logo=react&logoColor=white)](https://react.dev/)
 [![Docker Image](https://img.shields.io/badge/Docker%20Image-%3C%2015%20MB-2496ED?logo=docker&logoColor=white)](https://github.com/wade6716/vLLM-Pulse/pkgs/container/vllm-pulse)
@@ -135,6 +136,7 @@ docker compose up -d
 | `--interval` | `1s` | 指标轮询与 SSE 推送间隔（支持 Go Duration 格式，最低 `200ms`） |
 | `--timeout` | `2s` | 单节点单次 `/metrics` HTTP 请求超时时间 |
 | `--retention-hours` | `24` | 1 分钟降采样环保留时长（范围 `6` ~ `24` 小时） |
+| `--version` / `-v` | `false` | 打印版本号、Commit 与构建时间后退出 |
 
 ---
 
@@ -262,6 +264,24 @@ cd web && npm run typecheck
 # 后端单元测试（覆盖首次基线归零、重启重置、分位数线性插值、除零保护等）
 go test -v -race ./...
 ```
+
+---
+
+## 📦 版本管理与自动化发版
+
+本项目采用 **`VERSION` + `CHANGELOG.md` 驱动**的双工作流自动化构建与发版机制：
+
+* **持续集成（`.github/workflows/ci.yml`）**：日常推送至 `main` 时自动运行前端类型检查/构建、Go `-race` 单测，并发布多架构开发预览镜像 `ghcr.io/wade6716/vllm-pulse:edge`（绝不覆盖稳定版 `latest`）。
+* **正式发版（`.github/workflows/release.yml`）**：
+  1. 编辑根目录 [VERSION](VERSION)（如改为 `0.2.0` 或预发布 `0.2.0-rc.1`）；
+  2. 在 [CHANGELOG.md](CHANGELOG.md) 顶部添加对应 `## [0.2.0]` 段落（若省略，则自动回退由 GitHub 生成分类说明）；
+  3. 推送至 `main` 分支后，Actions 自动完成：**质量门禁测试 → 自动打 `vX.Y.Z` Tag → 推送 GHCR 多架构正式镜像（`latest` / `X.Y` / `X.Y.Z`）→ 打包 5 平台归档（`linux/darwin amd64/arm64` + `windows amd64`）与 `checksums.txt` → 发布 GitHub Release**。
+
+| Docker 镜像标签 | 说明 |
+| --- | --- |
+| `latest` | 最新稳定正式版（预发布版 `-rc`/`-beta` 不会覆盖此标签） |
+| `vX.Y.Z` / `X.Y.Z` / `X.Y` | 固定语义化版本镜像 |
+| `edge` | `main` 分支最新开发构建镜像 |
 
 ---
 
